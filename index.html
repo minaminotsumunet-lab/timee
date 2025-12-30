@@ -7,28 +7,35 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body{
+      margin:0;
       font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,"メイリオ",sans-serif;
-      padding:40px 16px;
+      padding:46px 16px;
       text-align:center;
-      line-height:1.7;
+      line-height:1.8;
+      background:#fff;
     }
-    h1{font-size:22px;margin-bottom:16px;}
-    #status{margin-top:16px;font-size:14px;color:#555;white-space:pre-line;}
+    h1{font-size:22px;margin:0 0 16px;}
+    #status{margin-top:18px;font-size:14px;color:#555;white-space:pre-line;}
     button{
-      margin-top:24px;
-      padding:10px 24px;
+      margin-top:22px;
+      padding:12px 26px;
       border:none;
-      border-radius:6px;
+      border-radius:10px;
       background:#06C755;
       color:#fff;
       font-size:16px;
+      font-weight:700;
     }
+    .hint{margin-top:10px;color:#777;font-size:13px;}
   </style>
 </head>
 <body>
-  <h1>登録フォームを開いています…</h1>
-  <p>自動で遷移しない場合は下のボタンを押してください。</p>
-  <button id="openBtn">フォームを開く</button>
+  <h1>登録フォームへ遷移しています…</h1>
+  <div class="hint">自動で遷移しない場合は下のボタンでリロードしてください（再実行します）。</div>
+
+  <!-- ★フォームを開くボタンは廃止 → リロードだけ -->
+  <button id="reloadBtn">リロードする</button>
+
   <div id="status"></div>
 
   <script>
@@ -36,14 +43,18 @@
     const LIFF_ID  = '2008793535-Jkr7yw46';
 
     // ★ LIFFフォーム用GASの /exec URL に置き換えてください
-    // 例）https://script.google.com/macros/s/AKfy....../exec
     const FORM_URL = 'https://script.google.com/macros/s/AKfycbyjoffkbtHjYn9wH26rOz7HzXzU8GoW2BGHpbQU6wXd4tNr4aBxfcENJFVcAUBveZ_e/exec';
 
     const statusEl = document.getElementById('status');
-    const openBtn  = document.getElementById('openBtn');
+    const reloadBtn  = document.getElementById('reloadBtn');
     const log = msg => statusEl.textContent = msg;
 
-    openBtn.onclick = () => { location.href = FORM_URL; };
+    function reloadWithBust(){
+      const p = new URLSearchParams(location.search);
+      p.set('v', Date.now());     // キャッシュ回避
+      location.replace(location.pathname + '?' + p.toString());
+    }
+    reloadBtn.onclick = reloadWithBust;
 
     async function main(){
       try{
@@ -62,7 +73,9 @@
 
         if (!liff.isLoggedIn()) {
           log('ログインします…');
-          liff.login({ redirectUri: location.href });
+          // v を更新してループしても問題ないように
+          params.set('v', Date.now());
+          liff.login({ redirectUri: location.pathname + '?' + params.toString() });
           return;
         }
 
@@ -73,21 +86,24 @@
 
         log('依頼者IDを取得しました。フォームへ遷移します…');
 
-        // 元のクエリ（mode=edit など）をフォームにも引き継ぐ（close だけ除外）
+        // 元のクエリ（mode=edit 等）をフォームへ引き継ぐ（closeは除外）
         params.delete('close');
 
-        const targetParams = new URLSearchParams(params.toString());
-        targetParams.set('lineUserId', userId);
-        targetParams.set('displayName', name);
+        // GAS側に渡す値
+        params.set('lineUserId', userId);
+        params.set('displayName', name);
 
-        const target = FORM_URL + '?' + targetParams.toString();
+        // キャッシュ回避（毎回新しいURLで /exec を呼ぶ）
+        params.set('v', Date.now());
+
+        const target = FORM_URL + '?' + params.toString();
         location.replace(target);
 
       } catch (e) {
         console.error(e);
         log('LIFF エラー: ' + (e && e.message ? e.message : e) +
-            '\nこのままフォームのみ開きます。');
-        location.href = FORM_URL;
+            '\nリロードすると再実行します。');
+        // ここでは勝手にFORMへ飛ばさず、ユーザーが「リロード」で再試行できるようにする
       }
     }
 
